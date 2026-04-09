@@ -1,0 +1,23 @@
+name: nav_study_sim
+description: "NavStudy — Focus Navigator"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.3
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  maplibre_gl: ^0.25.0
+  latlong2: ^0.9.1  # kept for Distance calculations in models.dart
+  http: ^1.4.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
