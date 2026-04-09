@@ -3,11 +3,12 @@
 // Nothing in this file touches Flutter widgets — it is pure Dart + http.
 //
 // External APIs used:
-//   Mapbox     (geocoding, primary)  — https://api.mapbox.com
+//   Foursquare (geocoding, primary)  — https://api.foursquare.com/v3  (free key)
+//   Nominatim  (geocoding, fallback) — https://nominatim.openstreetmap.org  (free)
 //   Photon     (geocoding, fallback) — https://photon.komoot.io  (free, no key)
 //   Nominatim  (reverse-geo)         — https://nominatim.openstreetmap.org
-//   Mapbox     (routing)             — https://api.mapbox.com/directions
-//   Open-Meteo (weather)             — https://api.open-meteo.com
+//   Mapbox     (routing)             — https://api.mapbox.com/directions  (free key)
+//   Open-Meteo (weather)             — https://api.open-meteo.com  (free, no key)
 
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
@@ -245,33 +246,6 @@ class ApiService {
     );
   }
 
-  /// Mapbox geocoding — kept as reference but no longer called for forward search.
-  static Future<List<Place>> _geocodeMapbox(String query, {LatLng? near}) async {
-    final proximity = near != null
-        ? '&proximity=${near.longitude},${near.latitude}'
-        : '';
-    final url = Uri.parse(
-      '$_mapbox/geocoding/v5/mapbox.places/${Uri.encodeComponent(query)}.json'
-      '?access_token=$_mapboxToken'
-      '&limit=8&language=en$proximity',
-    );
-    try {
-      final res = await _client.get(url, headers: _headers)
-          .timeout(const Duration(seconds: 8));
-      if (res.statusCode != 200) {
-        debugPrint('[Geocode] Mapbox status ${res.statusCode}');
-        return [];
-      }
-      final data = jsonDecode(res.body) as Map<String, dynamic>;
-      final features = data['features'] as List? ?? [];
-      return features
-          .map((f) => _parseMapboxPlace(f as Map<String, dynamic>))
-          .toList();
-    } catch (e) {
-      debugPrint('[Geocode] Mapbox error: $e');
-      return [];
-    }
-  }
 
   /// Photon geocoding — free, no API key, backed by OpenStreetMap/Nominatim data.
   /// Supports proximity bias via lat/lon params. Results quality is comparable
@@ -339,52 +313,6 @@ class ApiService {
     );
   }
 
-  // ── Mapbox place parser ────────────────────────────────────────────────────────
-  static Place _parseMapboxPlace(Map<String, dynamic> f) {
-    final coords = f['center'] as List; // [lng, lat]
-    final lng = (coords[0] as num).toDouble();
-    final lat = (coords[1] as num).toDouble();
-
-    // "place_name" is the full formatted address Mapbox returns
-    final placeName = f['place_name']?.toString() ?? '';
-    // "text" is the short primary name (POI name, street name, city name)
-    final text = f['text']?.toString() ?? '';
-
-    // Build detail from place_name by stripping the primary text prefix
-    final detail = placeName.startsWith('$text, ')
-        ? placeName.substring(text.length + 2)
-        : placeName;
-
-    // Extract address components from context array
-    String city = '', state = '', country = '', countryCode = '';
-    final context = f['context'] as List? ?? [];
-    for (final c in context.cast<Map<String, dynamic>>()) {
-      final id = c['id']?.toString() ?? '';
-      final val = c['text']?.toString() ?? '';
-      if (id.startsWith('place'))     city        = val;
-      if (id.startsWith('region'))    state       = val;
-      if (id.startsWith('country'))   country     = val;
-      if (c['short_code'] != null && id.startsWith('country')) {
-        countryCode = c['short_code'].toString().toLowerCase();
-      }
-    }
-
-    // For addresses, Mapbox puts the house number in 'address'
-    final houseNumber = f['address']?.toString() ?? '';
-    final displayName = houseNumber.isNotEmpty ? '$houseNumber $text' : text;
-
-    return Place(
-      position: LatLng(lat, lng),
-      name: displayName,
-      detail: detail,
-      address: {
-        'city': city,
-        'state': state,
-        'country': country,
-        'country_code': countryCode,
-      },
-    );
-  }
 
   // ── Reverse geocoding (Nominatim — better street-level address detail) ──────────
   // Given a LatLng (usually from a map tap), asks Nominatim what place / road
